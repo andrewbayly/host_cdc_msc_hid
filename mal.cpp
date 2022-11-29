@@ -488,7 +488,7 @@ void mal_key_pressed(char ch){
 }
 
 void mal_init(){ 
-  std::string s("*** Welcome to Lisp ***\r > "); 
+  std::string s("*** Welcome to Lisp! ***\r > "); 
   print_string(s); 
 
 //  string s2("(((ppp)))"); 
