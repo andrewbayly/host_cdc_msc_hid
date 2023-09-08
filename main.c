@@ -70,7 +70,7 @@ void mal_init(void);
 // TMDS bit clock 252 MHz
 // DVDD 1.2V (1.1V seems ok too)
 #define FRAME_WIDTH 320
-#define FRAME_HEIGHT 240
+#define FRAME_HEIGHT 240 
 #define VREG_VSEL VREG_VOLTAGE_1_20
 #define DVI_TIMING dvi_timing_640x480p_60hz
 

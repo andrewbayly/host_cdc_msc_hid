@@ -15,6 +15,70 @@ TODO:
 
 **/
 
+/***
+(defun square (x) (* x x) ) - DONE!
+    (def! square (fn* (x) (* x x)))
+
+defines a function and stores the definition in code
+  - create "code" structure - map from string to Node* - DONE!
+  - implement deepCopy on Node. - DONE!
+  - in EVAL ("defun") special form:
+    - create two copies of expressions
+    - get name from expression and set property in code
+    - get name, params, body from expression and create "def!" expression and evaluate it.
+
+(code) - DONE!
+returns a list of the functions which have been defined in code
+    - implement special form
+    - implement pretty print 
+
+(code foo) - DONE!
+returns the definition of foo from code
+  
+(code-names) - DONE!
+returns a list of the names of the functions which have been defined in code
+
+(undef foo)
+removes the definition of foo from code
+
+(save foobar)
+saves the function definitions currently in code into a file called foobar.lsp
+
+(load foobar)
+clears the definitions currently in code and then loads the definitions from the file called foobar.lsp
+
+(insert <name> <address> <content>)
+(append <name> <address> <content>)
+insert or append the content at the address in function definition foo
+
+(remove <name> <address>)
+remove the expression at the address in function <name>
+
+Example: 
+
+> (code fact)
+(defun fact (x) 
+  (if (= x 1) 1
+    (fact (- x 1))
+  )
+)
+
+> (remove fact (3 3))
+(defun fact (x) 
+  ( if (= x 1) 1 )
+)
+
+> (append fact (3 2) ((* x (fact (- x 1)))))
+(defun fact (x) 
+  ( if (= x 1) 1 
+    (* x (fact (- x 1)))
+  )
+)
+
+***/
+
+
+
 extern "C" int foo();
 extern "C" void print(char ch); 
 extern "C" void mal_key_pressed(char ch); 
@@ -149,10 +213,35 @@ public:
       return "ERROR!"; 
   }
   
+  string toPrettyString(string indent){ 
+    string str = toString(); 
+    if((str.size() <= 12) || (type != NODE_LIST))
+      return (indent + str); 
+      
+    string pretty = indent + string("(\r"); 
+    for(unsigned int i = 0; i < list.size(); i++){
+      pretty += list[i]->toPrettyString(indent + string(" "));
+      pretty += string("\r");
+    }  
+    
+    pretty += (indent + string(")"));
+    return pretty;       
+  }
+  
   int type; 
   vector<Node*> list; 
   int value;
   string symbol; 
+  
+  Node* deepCopy(){ 
+    Node* that = new Node(type); 
+    that->value = value; 
+    that->symbol = symbol; 
+    for(unsigned int i = 0; i < list.size(); i++){ 
+      that->list.push_back(list[i]->deepCopy()); 
+    }
+    return that;   
+  }  
   
   virtual Node* call(vector<Node*>* args){
     return NULL;  
@@ -353,6 +442,51 @@ public:
 
 Env repl_env(NULL); 
 
+//------------------------------------------------------------------------------
+//  Code
+//------------------------------------------------------------------------------
+
+class Code { 
+public: 
+  Code(){ 
+  }
+
+  void set(string key, Node* value){ 
+    data[key] = value; 
+  }
+  
+  Node* get(string key){ 
+    return data[key]; 
+  }
+  
+  //returns all the nodes inside an enclosing list node
+  Node* getAll(){ 
+    Node* pRet = new Node(NODE_LIST); 
+          
+    //get all keys from the map: 
+    vector<string> keys;
+    keys.reserve(data.size());
+    
+    for(auto k : data){ 
+      keys.push_back(k.first); 
+    }
+    
+    //sort them:
+    sort(keys.begin(), keys.end()); 
+    
+    for(unsigned int i = 0; i < keys.size(); i++){ 
+      Node* value = data[keys[i]]; 
+      pRet->list.push_back(value); 
+    } 
+    
+    return pRet; 
+  }
+  
+  unordered_map<string, Node*> data; 
+}; 
+
+Code code; 
+
 //forward:
 Node* EVAL(Node* pNode, Env* pEnv); 
 
@@ -400,17 +534,71 @@ Node* eval_ast(Node* ast, Env* pEnv){
 }
 
 Node* EVAL(Node* pNode, Env* pEnv){
-
   if(pNode->type == NODE_LIST){ 
     if(pNode->list.size() == 0){ 
       return pNode; 
     } else {
       //specials: 
-      if(pNode->list[0]->isSpecial(string("def!"))){ 
+      if(pNode->list[0]->isSpecial(string("code-names"))){ 
+        Node* pList = new Node(NODE_LIST); 
+        for(auto k : code.data){ 
+          Node* pCodeName = new Node(NODE_SYMBOL);
+          pCodeName->symbol = k.first;  
+          pList->list.push_back(pCodeName);  
+        }
+        return pList; 
+      }
+      else if(pNode->list[0]->isSpecial(string("code"))){ 
+        if(pNode->list.size() == 2){ 
+          return code.get(pNode->list[1]->symbol);
+        }
+        else{
+          return code.getAll();   
+        }
+      }
+      else if(pNode->list[0]->isSpecial(string("def!"))){ 
         string symbol = pNode->list[1]->symbol; 
         Node* value = EVAL(pNode->list[2], pEnv); 
         pEnv->set(symbol, value);
         return value;   
+      }
+      else if(pNode->list[0]->isSpecial(string("defun"))){
+        
+        //get name of function:
+        Node* pNode1 = pNode->deepCopy(); 
+        string name = pNode1->list[1]->symbol; 
+        
+        //set in code: 
+        code.set(name, pNode1); 
+        
+        //def!: 
+        
+        //(defun square (x) (* x x) ) 
+        //(def! square (fn* (x) (* x x)))
+
+        Node* params = pNode->list[2]; 
+        Node* body = pNode->list[3]; 
+        
+        Node* pNode2 = new Node(NODE_LIST); 
+        Node* def = new Node(NODE_SYMBOL); 
+        def->symbol = string("def!"); 
+        pNode2->list.push_back(def); 
+        
+        Node* name2 = new Node(NODE_SYMBOL); 
+        name2->symbol = name; 
+        pNode2->list.push_back(name2); 
+                
+        Node* function = new Node(NODE_LIST); 
+        Node* fn = new Node(NODE_SYMBOL); 
+        fn->symbol = string("fn*"); 
+        function->list.push_back(fn); 
+        function->list.push_back(params); 
+        function->list.push_back(body); 
+        
+        pNode2->list.push_back(function); 
+                 
+        return EVAL(pNode2, pEnv); 
+       
       }
       else if(pNode->list[0]->isSpecial(string("if"))){
         Node* test = EVAL(pNode->list[1], pEnv);
@@ -449,7 +637,7 @@ Node* EVAL(Node* pNode, Env* pEnv){
 }
 
 std::string PRINT(Node* pNode){ 
-  return pNode->toString(); 
+  return pNode->toPrettyString(string("")); 
 }
 
 std::string rep(std::string str){ 
