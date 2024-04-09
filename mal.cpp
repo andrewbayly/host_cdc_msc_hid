@@ -78,6 +78,15 @@ Example:
 ***/
 
 
+/**
+  primitives: 
+    + - * = % code-names code def! defun if fn* cons
+
+  TODO: 
+    car cdr quote
+
+**/
+
 
 extern "C" int foo();
 extern "C" void print(char ch); 
@@ -294,6 +303,20 @@ public:
   virtual Node* call(vector<Node*>* args){
     Node* pNode = new Node(NODE_NUMBER); 
     pNode->value = args->at(0)->value * args->at(1)->value; 
+    return pNode;   
+  }
+};
+
+class ModuloFunction : public Node { 
+
+public: 
+  ModuloFunction(): Node(NODE_FUNCTION)
+  { 
+  }   
+
+  virtual Node* call(vector<Node*>* args){
+    Node* pNode = new Node(NODE_NUMBER); 
+    pNode->value = args->at(0)->value % args->at(1)->value; 
     return pNode;   
   }
 };
@@ -538,7 +561,7 @@ Node* EVAL(Node* pNode, Env* pEnv){
     if(pNode->list.size() == 0){ 
       return pNode; 
     } else {
-      //specials: 
+      //specials and primitives: 
       if(pNode->list[0]->isSpecial(string("code-names"))){ 
         Node* pList = new Node(NODE_LIST); 
         for(auto k : code.data){ 
@@ -547,6 +570,15 @@ Node* EVAL(Node* pNode, Env* pEnv){
           pList->list.push_back(pCodeName);  
         }
         return pList; 
+      }
+      else if(pNode->list[0]->isSpecial(string("cons"))){ 
+        Node* pRet = EVAL(pNode->list[2], pEnv)->deepCopy(); 
+        Node* pVal = EVAL(pNode->list[1], pEnv); 
+        pRet->list.push_back(pVal); 
+        return pRet;         
+      }
+      else if(pNode->list[0]->isSpecial(string("quote"))){ 
+        return pNode->list[1]; 
       }
       else if(pNode->list[0]->isSpecial(string("code"))){ 
         if(pNode->list.size() == 2){ 
@@ -687,6 +719,9 @@ void mal_init(){
   repl_env.set("-", new SubtractFunction()); 
   repl_env.set("*", new MultiplyFunction()); 
   repl_env.set("=", new EqualsFunction()); 
+
+  repl_env.set("%", new ModuloFunction()); 
+  
   
 }
 
